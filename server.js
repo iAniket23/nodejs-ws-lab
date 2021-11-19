@@ -32,7 +32,7 @@ function setupWSServer(server) {
     server,
     autoAcceptConnections: false
   });
-  let actorCoordinates = { x: 100, y: 100 };
+  let actorCoordinates = { };
   wss.on("connection", (ws) => {
     ws.on("message", (rawMsg) => {
       console.log(`RECV: ${rawMsg}`);
