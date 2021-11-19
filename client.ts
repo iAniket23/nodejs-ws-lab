@@ -1,3 +1,6 @@
+// This is browser code that gets transformed using Parcel/Babel
+// Therefore you can now use ES6 style imports
+
 import * as Phaser from "phaser";
 
 interface ICoords {
@@ -38,13 +41,14 @@ class GameScene extends Phaser.Scene {
 
   private VELOCITY = 100;
   private wsClient?: WebSocket;
+  //private player?: Phaser.GameObjects.Sprite;
   private leftKey?: Phaser.Input.Keyboard.Key;
   private rightKey?: Phaser.Input.Keyboard.Key;
   private upKey?: Phaser.Input.Keyboard.Key;
   private downKey?: Phaser.Input.Keyboard.Key;
 
   private id = uuid();
-  private players: {[key: string]: Phaser.GameObjects.Sprite} = {};
+  private players: { [key: string]: Phaser.GameObjects.Sprite } = {};
 
   constructor() { super({ key: "GameScene" }); }
 
@@ -66,20 +70,17 @@ class GameScene extends Phaser.Scene {
     // Initialize the websocket client
     this.wsClient = new WebSocket(`ws://${this.HOST}:${this.PORT}`);
     this.wsClient.onopen = (event) => console.log(event);
-
+    // TODO: multiplayer functionality
     this.wsClient.onmessage = (wsMsgEvent) => {
       const allCoords: ICoords = JSON.parse(wsMsgEvent.data);
       for (const playerId of Object.keys(allCoords)) {
         if (playerId === this.id) {
-          // we don't need to update ourselves
           continue;
         }
         const { x, y, frame } = allCoords[playerId];
         if (playerId in this.players) {
-          // We have seen this player before, update it!
           const player = this.players[playerId];
           if (player.texture.key === "__MISSING") {
-            // Player was instantiated before texture was ready, reinstantiate
             player.destroy();
             this.players[playerId] = this.add.sprite(x, y, "player", frame);
           } else {
@@ -88,7 +89,6 @@ class GameScene extends Phaser.Scene {
             player.setFrame(frame);
           }
         } else {
-          // We have not seen this player before, create it!
           this.players[playerId] = this.add.sprite(x, y, "player", frame);
         }
       }
@@ -150,16 +150,29 @@ class GameScene extends Phaser.Scene {
   }
 
   public update() {
+
     for (const playerId of Object.keys(this.players)) {
       const player = this.players[playerId];
 
       if (playerId !== this.id) {
-        player.setTint(0x0000aa);
+        player.setTint(0x0000aa); 
         player.update();
         continue;
       }
 
       let moving = false;
+      if (!moving) {
+        (player.body as Phaser.Physics.Arcade.Body).setVelocity(0);
+        player.anims.stop();
+      } else if (this.wsClient) {
+        this.wsClient.send(JSON.stringify({
+          id: this.id,
+          x: player.x,
+          y: player.y,
+          frame: player.frame.name
+        }));
+      }
+
       if (this.leftKey && this.leftKey.isDown) {
         (player.body as Phaser.Physics.Arcade.Body).setVelocityX(-this.VELOCITY);
         player.play("left", true);
@@ -182,23 +195,11 @@ class GameScene extends Phaser.Scene {
       } else {
         (player.body as Phaser.Physics.Arcade.Body).setVelocityY(0);
       }
-      if (!moving) {
-        (player.body as Phaser.Physics.Arcade.Body).setVelocity(0);
-        player.anims.stop();
-      } else if (this.wsClient) {
-        this.wsClient.send(JSON.stringify({
-          id: this.id,
-          x: player.x,
-          y: player.y,
-          frame: player.frame.name
-        }));
-      }
+      
       player.update();
     }
   }
 }
-
-
 // Phaser configuration variables
 const config: GameConfig = {
   type: Phaser.AUTO,
@@ -212,13 +213,11 @@ const config: GameConfig = {
   },
   render: { pixelArt: true, antialias: false }
 }
-
 class LabDemoGame extends Phaser.Game {
   constructor(config: GameConfig) {
     super(config);
   }
 }
-
 window.addEventListener("load", () => {
   new LabDemoGame(config);
 });
